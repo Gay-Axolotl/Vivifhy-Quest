@@ -1,0 +1,41 @@
+name: Build Quest Mod
+
+on:
+  push:
+    branches: [ main, master ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        submodules: true
+
+    - name: QPM Action
+      uses: Fernthedev/qpm-action@v1
+      with:
+        workflow_token: ${{ secrets.GITHUB_TOKEN }}
+        restore: true
+        cache: true
+        resolve_ndk: true
+
+    - name: Build
+      run: |
+        qpm s build
+
+    - name: Create QMOD
+      run: |
+        qpm s qmod
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: vivify-qmod
+        path: ./*.qmod

@@ -4,8 +4,8 @@
   "name": "Vivify",
   "id": "vivify",
   "modloader": "Scotland2",
-  "author": "Axolotl",
-  "version": "0.3.0",
+  "author": "Aeroluna",
+  "version": "0.0.4",
   "packageId": "com.beatgames.beatsaber",
   "packageVersion": "1.40.8_7379",
   "description": "Quest port of Vivify for Beat Saber.",
@@ -45,15 +45,23 @@
       "version": "^4.6.4",
       "id": "paper2_scotland2",
       "downloadIfMissing": "https://github.com/Fernthedev/paperlog/releases/download/v4.7.0/paper2_scotland2.qmod"
+    },
+    {
+      "version": "^1.0.3",
+      "id": "metacore",
+      "downloadIfMissing": "https://github.com/Metalit/MetaCore/releases/download/v1.6.3/MetaCore.qmod"
+    },
+    {
+      "version": "^0.6.8",
+      "id": "web-utils",
+      "downloadIfMissing": "https://github.com/bsq-ports/WebUtils/releases/download/v0.6.8/WebUtils.qmod"
     }
   ],
   "modFiles": [],
   "lateModFiles": [
-    "libvivify.so"
+    "libVivify.so"
   ],
   "libraryFiles": [],
   "fileCopies": [],
   "copyExtensions": []
 }
-
-

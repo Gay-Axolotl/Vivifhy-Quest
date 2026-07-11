@@ -1,0 +1,23 @@
+# Build and temp directories
+build/
+temp_qmod/
+extern/
+.qpm/
+
+# Private / user settings
+ndkpath.txt
+qpm.private.json
+CMakeUserPresets.json
+.vscode/
+
+# Compiled outputs
+*.qmod
+*.so
+*.dll
+*.exe
+*.o
+*.obj
+
+# OS generated files
+.DS_Store
+Thumbs.db

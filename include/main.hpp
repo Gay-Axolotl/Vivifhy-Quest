@@ -7,4 +7,15 @@
 #include "paper2_scotland2/shared/logger.hpp"
 #include "_config.hpp"
 Configuration &getConfig();
+bool GetMultipassRenderingEnabled();
+bool GetVivifyDebugLogging();
+bool GetDisableBeat0FilmgrainBlit();
+bool GetDisableAllBlits();
+bool GetDisableCreateCameraDepth();
+void EnsureConfigDefaults();
 constexpr auto PaperLogger = Paper::ConstLoggerContext("Vivify");
+
+#define VIVIFY_DEBUG(...)                                          \
+  do {                                                             \
+    if (GetVivifyDebugLogging()) PaperLogger.info(__VA_ARGS__);    \
+  } while (false)

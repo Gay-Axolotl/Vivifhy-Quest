@@ -6,8 +6,8 @@
   "info": {
     "name": "Vivify",
     "id": "vivify",
-    "version": "0.3.0",
-    "url": "https://github.com/axo-lotl/Vivify-Quest",
+    "version": "0.4.2",
+    "url": "https://github.com/Lookingforscripts1/Vivify-Quest3.0fork/",
     "additionalData": {
       "overrideSoName": "libvivify.so",
       "cmake": true
@@ -128,7 +128,7 @@
     },
     {
       "id": "web-utils",
-      "versionRange": "^1.1.2",
+      "versionRange": "^0.6.8",
       "additionalData": {}
     }
   ]
