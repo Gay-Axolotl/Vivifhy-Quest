@@ -1,4 +1,4 @@
-hi so this is vivify 0.4
+hi so this is vivify 0.4 yay
 **this is buggy but it also works kinda?** 
 this mod has come a long way but this is most likely the final release.
 
