@@ -56,6 +56,7 @@ public:
   bool IsReduceDebrisEnabled();
   void PushActiveDebrisPrefabs(std::vector<AssignedPrefabInfo*> infos);
   void PopActiveDebrisPrefabs();
+  void ApplyNotePrefabFor(GlobalNamespace::NoteController* noteController);
   void RestoreNoteVisuals(GlobalNamespace::NoteController* noteController);
   void RestoreDebrisVisuals(GlobalNamespace::NoteDebris* debris);
   void RestoreSaberVisuals(GlobalNamespace::SaberModelController* smc);
@@ -76,6 +77,7 @@ public:
   void ApplySecondaryCameraMainEffects(GlobalNamespace::MainEffectController* mainEffectController);
 
   void BindSecondaryCameraTextures();
+  void RestoreSecondaryCullingLayers();
 
 private:
   Runtime() = default;
@@ -220,8 +222,12 @@ private:
   void DestroyObjects(rapidjson::Value const& json);
   void HandleAssignObjectPrefab(CustomJSONData::CustomEventData* customEventData, rapidjson::Value const& json);
 
-  void ApplyNotePrefabFor(GlobalNamespace::NoteController* noteController);
   void RefreshActiveNoteVisuals();
+  std::string ComputePrefabFingerprint(std::vector<AssignedPrefabInfo*> const& infos) const;
+  std::string ComputeSaberFingerprint(std::vector<AssignedPrefabInfo*> const& modelInfos,
+                                      std::vector<AssignedPrefabInfo*> const& trailInfos) const;
+  bool ReplacementIntact(VisualReplacement const& replacement) const;
+  void ReassertNoteReplacement(GlobalNamespace::NoteController* noteController, VisualReplacement& replacement);
   bool AssignmentMatchesTracks(AssignedPrefabInfo const& info, GlobalNamespace::NoteData* noteData);
   void AddAssignedPrefab(std::string_view objectType, AssignedPrefabKind kind, std::string asset,
                          std::vector<TrackW> tracks, bool additive, std::optional<int> saberType = std::nullopt);

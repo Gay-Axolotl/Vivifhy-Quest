@@ -321,6 +321,9 @@ struct VisualReplacement {
   bool hasOriginalMaterialBlockRenderers = false;
   UnityEngine::Color lastSaberColor;
   bool hasLastSaberColor = false;
+
+  std::string appliedFingerprint;
+  bool hideOriginal = false;
 };
 struct ActiveSaberVisual {
   GlobalNamespace::SaberModelController* controller = nullptr;

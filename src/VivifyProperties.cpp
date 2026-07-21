@@ -628,6 +628,7 @@ std::unordered_map<std::string_view, SettingType> const kRenderSettingTypes = {
     {"skybox"sv, SettingType::MaterialAsset},
     {"sun"sv, SettingType::LightPrefab},
     {"antiAliasing"sv, SettingType::Int},
+    {"realtimeReflectionProbes"sv, SettingType::Bool},
 };
 
 bool IsLiteralColorArray(rapidjson::Value const& value) {
@@ -746,6 +747,32 @@ void Runtime::ParseAndApplyRenderSetting(std::string const& key, rapidjson::Valu
 
 namespace {
 
+using QualityBoolSetter = void (*)(bool);
+using QualityBoolGetter = bool (*)();
+
+QualityBoolSetter RealtimeReflectionProbesSetter() {
+  static auto* setter = reinterpret_cast<QualityBoolSetter>(
+      il2cpp_functions::resolve_icall("UnityEngine.QualitySettings::set_realtimeReflectionProbes"));
+  return setter;
+}
+
+QualityBoolGetter RealtimeReflectionProbesGetter() {
+  static auto* getter = reinterpret_cast<QualityBoolGetter>(
+      il2cpp_functions::resolve_icall("UnityEngine.QualitySettings::get_realtimeReflectionProbes"));
+  return getter;
+}
+
+void LogRealtimeReflectionProbesIcallOnce() {
+  static bool logged = false;
+  if (logged) return;
+  logged = true;
+  auto* setter = RealtimeReflectionProbesSetter();
+  auto* getter = RealtimeReflectionProbesGetter();
+  PaperLogger.info("Vivify realtimeReflectionProbes icall: setter={} getter={} deviceDefault={}",
+                   setter != nullptr, getter != nullptr,
+                   getter != nullptr ? (getter() ? "on" : "off") : "?");
+}
+
 void RawApplyRenderSettingFloat(std::string const& name, float val) {
   if (name == "fogDensity") UnityEngine::RenderSettings::set_fogDensity(val);
   else if (name == "fogStartDistance") UnityEngine::RenderSettings::set_fogStartDistance(val);
@@ -766,6 +793,10 @@ void RawApplyRenderSettingColor(std::string const& name, UnityEngine::Color val)
 }
 void RawApplyRenderSettingBool(std::string const& name, bool val) {
   if (name == "fog") UnityEngine::RenderSettings::set_fog(val);
+  else if (name == "realtimeReflectionProbes") {
+    LogRealtimeReflectionProbesIcallOnce();
+    if (auto* setter = RealtimeReflectionProbesSetter()) setter(val);
+  }
 }
 void RawApplyRenderSettingInt(std::string const& name, int val) {
   if (name == "antiAliasing") UnityEngine::QualitySettings::set_antiAliasing(val);
@@ -833,6 +864,10 @@ void Runtime::SaveRenderSetting(std::string const& name, RenderSettingKind kind)
   else if (name == "skybox") saved.saved = UnityEngine::RenderSettings::get_skybox().unsafePtr();
   else if (name == "sun") saved.saved = UnityEngine::RenderSettings::get_sun().unsafePtr();
   else if (name == "antiAliasing") saved.saved = UnityEngine::QualitySettings::get_antiAliasing();
+  else if (name == "realtimeReflectionProbes") {
+    auto* getter = RealtimeReflectionProbesGetter();
+    saved.saved = getter != nullptr ? getter() : false;
+  }
   else return;
   _savedRenderSettings.push_back(std::move(saved));
 }

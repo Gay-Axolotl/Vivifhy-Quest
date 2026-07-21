@@ -811,6 +811,18 @@ void Runtime::BindSecondaryCameraTextures() {
   }
 }
 
+void Runtime::RestoreSecondaryCullingLayers() {
+  for (auto& [name, cam] : _secondaryCameras) {
+    if (!IsAlive(cam.camera)) continue;
+    auto* go = cam.camera->get_gameObject().unsafePtr();
+    if (!IsAlive(go)) continue;
+    auto* culling = go->GetComponent<CullingCameraController*>();
+    if (IsAlive(culling)) {
+      culling->CullingPostRender();
+    }
+  }
+}
+
 bool Runtime::DestroySecondaryCameraById(std::string const& id) {
   auto it = _secondaryCameras.find(id);
   if (it == _secondaryCameras.end()) return false;

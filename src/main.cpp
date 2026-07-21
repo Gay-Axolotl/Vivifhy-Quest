@@ -143,7 +143,7 @@ void EnsureConfigDefaults() {
 
   needsWrite |= EnsureBoolConfigValue(kMultipassRenderingConfigKey, false, gMultipassRenderingEnabled);
 
-  needsWrite |= EnsureBoolConfigValue(kVivifyDebugLoggingConfigKey, true, gVivifyDebugLogging);
+  needsWrite |= EnsureBoolConfigValue(kVivifyDebugLoggingConfigKey, false, gVivifyDebugLogging);
   needsWrite |= EnsureBoolConfigValue(kDisableBeat0FilmgrainBlitConfigKey, false, gDisableBeat0FilmgrainBlit);
   needsWrite |= EnsureBoolConfigValue(kDisableAllBlitsConfigKey, false, gDisableAllBlits);
   needsWrite |= EnsureBoolConfigValue(kDisableCreateCameraDepthConfigKey, false, gDisableCreateCameraDepth);
@@ -160,7 +160,7 @@ MOD_EXTERN_FUNC void setup(CModInfo *info) noexcept {
 
   gMultipassRenderingEnabled = false;
 
-  gVivifyDebugLogging = true;
+  gVivifyDebugLogging = false;
   PaperLogger.info("Vivify file logging active -> {}", kVivifyLogPath);
 }
 MOD_EXTERN_FUNC void late_load() noexcept {

@@ -5,11 +5,10 @@
   "id": "vivify",
   "modloader": "Scotland2",
   "author": "axo",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "packageId": "com.beatgames.beatsaber",
   "packageVersion": "1.40.8_7379",
   "description": "Quest port of Vivify for Beat Saber.",
-  "coverImage": "cover.png",
   "dependencies": [
     {
       "version": "^6.4.2",

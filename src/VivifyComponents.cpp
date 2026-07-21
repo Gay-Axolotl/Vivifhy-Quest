@@ -161,6 +161,8 @@ void FollowedSaberTrail::Cleanup() {
 
 namespace {
 
+constexpr int kCullingLayer = 22;
+
 bool HasSecondaryCameraController(UnityEngine::MonoBehaviour* self) {
   auto go = self->get_gameObject();
   if (!IsManagedAlive(go.unsafePtr())) return false;
@@ -182,12 +184,15 @@ void CullingCameraController::CullingPreCull() {
   if (_camera == nullptr) _camera = GetComponent<UnityEngine::Camera*>();
   if (!IsManagedAlive(_camera)) return;
   if (!_hasCullingData) return;
-  _cachedMask = _camera->get_cullingMask();
-  std::unordered_set<UnityEngine::Renderer*> seenRenderers;
-  int whitelistMask = 0;
+
+  CullingPostRender();
+
   if (_whitelist) {
-    _camera->set_cullingMask(0);
+    _cachedMask = _camera->get_cullingMask();
+    _camera->set_cullingMask(1 << kCullingLayer);
   }
+
+  std::unordered_set<UnityEngine::GameObject*> seen;
   int trackedGameObjects = 0;
   for (auto const& track : _tracks) {
     if (!track) continue;
@@ -198,29 +203,22 @@ void CullingCameraController::CullingPreCull() {
       if (!renderers) continue;
       for (auto* renderer : renderers) {
         if (!IsManagedAlive(renderer)) continue;
-        if (!seenRenderers.emplace(renderer).second) continue;
         auto renderGo = renderer->get_gameObject();
-        if (!IsManagedAlive(renderGo.unsafePtr())) continue;
-        if (_whitelist) {
-          int layer = renderGo->get_layer();
-          if (layer >= 0 && layer < 32) whitelistMask |= (1 << layer);
-        } else {
-          _cachedRendererStates.emplace_back(renderer, renderer->get_enabled());
-          renderer->set_enabled(false);
-        }
+        auto* renderGoPtr = renderGo.unsafePtr();
+        if (!IsManagedAlive(renderGoPtr)) continue;
+        if (!seen.emplace(renderGoPtr).second) continue;
+        _cachedLayers.emplace_back(renderGoPtr, renderGoPtr->get_layer());
+        renderGoPtr->set_layer(kCullingLayer);
       }
     }
-  }
-  if (_whitelist) {
-    _camera->set_cullingMask(whitelistMask);
   }
 
   if (_diagLogCount < 3 && GetVivifyDebugLogging()) {
     _diagLogCount++;
     auto go = get_gameObject();
-    PaperLogger.info("Vivify culling pass on '{}': whitelist={} tracks={} trackedGOs={} affectedRenderers={} camMask=0x{:08x}",
+    PaperLogger.info("Vivify culling pass on '{}': whitelist={} tracks={} trackedGOs={} movedGOs={} camMask=0x{:08x}",
                      IsManagedAlive(go.unsafePtr()) ? ToStdString(go->get_name()) : std::string("?"),
-                     BoolText(_whitelist), _tracks.size(), trackedGameObjects, seenRenderers.size(),
+                     BoolText(_whitelist), _tracks.size(), trackedGameObjects, _cachedLayers.size(),
                      static_cast<uint32_t>(_camera->get_cullingMask()));
   }
 }
@@ -230,12 +228,12 @@ void CullingCameraController::CullingPostRender() {
     _camera->set_cullingMask(_cachedMask.value());
     _cachedMask.reset();
   }
-  for (auto const& [renderer, enabled] : _cachedRendererStates) {
-    if (IsManagedAlive(renderer)) {
-      renderer->set_enabled(enabled);
+  for (auto const& [go, layer] : _cachedLayers) {
+    if (IsManagedAlive(go)) {
+      go->set_layer(layer);
     }
   }
-  _cachedRendererStates.clear();
+  _cachedLayers.clear();
 }
 
 void SecondaryCameraController::OnPreCull() {
@@ -357,6 +355,11 @@ void RuntimeBehaviour::Update() {
 
 void RuntimeBehaviour::OnDestroy() {
   Runtime::Instance().OnBehaviourDestroyed(this);
+}
+
+void CameraApplier::OnPreCull() {
+
+  Runtime::Instance().RestoreSecondaryCullingLayers();
 }
 
 void CameraApplier::OnPreRender() {

@@ -212,15 +212,18 @@ void Runtime::HandleAssignObjectPrefab(CustomJSONData::CustomEventData*, rapidjs
                      ReadInt(objVal, "trailGranularity"));
   };
 
+  bool notesChanged = false;
   auto processTrackedObject = [&](std::string_view objType) {
     auto* objVal = ReadValuePtr(json, objType);
     if (objVal == nullptr || !objVal->IsObject()) return;
+    notesChanged = true;
     auto tracks = ReadTracks(*objVal, v2);
     applyAsset(*objVal, objType, AssignedPrefabKind::Object, "asset", tracks);
     applyAsset(*objVal, objType, AssignedPrefabKind::Debris, "debrisAsset", tracks);
   };
 
   if (auto* colorNotes = ReadValuePtr(json, "colorNotes"); colorNotes != nullptr && colorNotes->IsObject()) {
+    notesChanged = true;
     auto tracks = ReadTracks(*colorNotes, v2);
     applyAsset(*colorNotes, "colorNotes", AssignedPrefabKind::Object, "asset", tracks);
     applyAsset(*colorNotes, "colorNotes", AssignedPrefabKind::AnyDirectionObject, "anyDirectionAsset", tracks);
@@ -253,7 +256,79 @@ void Runtime::HandleAssignObjectPrefab(CustomJSONData::CustomEventData*, rapidjs
     ApplySaberVisualsToActive();
   }
 
-  RefreshActiveNoteVisuals();
+  if (notesChanged) {
+    RefreshActiveNoteVisuals();
+  }
+}
+
+std::string Runtime::ComputePrefabFingerprint(std::vector<AssignedPrefabInfo*> const& infos) const {
+  std::string fingerprint;
+  for (auto const* info : infos) {
+    if (info == nullptr) continue;
+    fingerprint += info->asset;
+    fingerprint += '\x1f';
+    fingerprint += info->additive ? '1' : '0';
+    fingerprint += static_cast<char>('0' + static_cast<int>(info->kind));
+    fingerprint += '\x1e';
+  }
+  return fingerprint;
+}
+
+std::string Runtime::ComputeSaberFingerprint(std::vector<AssignedPrefabInfo*> const& modelInfos,
+                                             std::vector<AssignedPrefabInfo*> const& trailInfos) const {
+  std::string fingerprint = ComputePrefabFingerprint(modelInfos);
+  fingerprint += '\x1d';
+  auto formatVector = [](std::optional<UnityEngine::Vector3> const& value) {
+    return value.has_value() ? fmt::format("{:.4f},{:.4f},{:.4f}", value->x, value->y, value->z)
+                             : std::string("-");
+  };
+  for (auto const* info : trailInfos) {
+    if (info == nullptr) continue;
+    fingerprint += info->asset;
+    fingerprint += '\x1f';
+    fingerprint += info->additive ? '1' : '0';
+    fingerprint += formatVector(info->trailTopPos);
+    fingerprint += '|';
+    fingerprint += formatVector(info->trailBottomPos);
+    fingerprint += '|';
+    fingerprint += info->trailDuration.has_value() ? fmt::format("{:.4f}", *info->trailDuration) : std::string("-");
+    fingerprint += '|';
+    fingerprint += info->trailSamplingFrequency.has_value() ? std::to_string(*info->trailSamplingFrequency)
+                                                            : std::string("-");
+    fingerprint += '|';
+    fingerprint += info->trailGranularity.has_value() ? std::to_string(*info->trailGranularity) : std::string("-");
+    fingerprint += '\x1e';
+  }
+  return fingerprint;
+}
+
+bool Runtime::ReplacementIntact(VisualReplacement const& replacement) const {
+  for (auto* spawned : replacement.spawnedObjects) {
+    if (!IsAlive(spawned)) return false;
+  }
+  for (auto* followedTrail : replacement.followedTrails) {
+    if (!IsAlive(followedTrail) || !IsAlive(followedTrail->____trailRenderer.unsafePtr())) return false;
+  }
+  return true;
+}
+
+void Runtime::ReassertNoteReplacement(GlobalNamespace::NoteController* noteController,
+                                      VisualReplacement& replacement) {
+
+  if (!replacement.hideOriginal || !IsAlive(noteController)) return;
+  std::unordered_set<UnityEngine::Renderer*> ours(replacement.replacementRenderers.begin(),
+                                                  replacement.replacementRenderers.end());
+  std::unordered_set<UnityEngine::Renderer*> recorded(replacement.disabledRenderers.begin(),
+                                                      replacement.disabledRenderers.end());
+  auto renderers = noteController->GetComponentsInChildren<UnityEngine::Renderer*>(true);
+  for (int i = 0; i < renderers.size(); i++) {
+    auto* renderer = renderers[i];
+    if (!IsAlive(renderer) || !renderer->get_enabled() || ours.contains(renderer)) continue;
+    renderer->set_enabled(false);
+    if (!recorded.contains(renderer)) {
+      replacement.disabledRenderers.emplace_back(renderer);
+    }
+  }
 }
 
 void Runtime::ApplyNotePrefabFor(GlobalNamespace::NoteController* noteController) {
@@ -285,6 +360,13 @@ void Runtime::ApplyNotePrefabFor(GlobalNamespace::NoteController* noteController
   if (infos.empty()) {
 
     RestoreNoteVisuals(noteController);
+    return;
+  }
+  auto existing = _noteReplacements.find(noteController);
+  if (existing != _noteReplacements.end() &&
+      existing->second.appliedFingerprint == ComputePrefabFingerprint(infos) &&
+      ReplacementIntact(existing->second)) {
+    ReassertNoteReplacement(noteController, existing->second);
     return;
   }
   ReplaceNoteVisuals(noteController, infos);
@@ -618,6 +700,8 @@ void Runtime::RestoreReplacementData(VisualReplacement& replacement) {
   replacement.originalMaterialBlockRenderers = nullptr;
   replacement.hasOriginalMaterialBlockRenderers = false;
   replacement.hasLastSaberColor = false;
+  replacement.appliedFingerprint.clear();
+  replacement.hideOriginal = false;
 }
 
 void Runtime::CacheReplacementRenderers(UnityEngine::GameObject* spawned, VisualReplacement& replacement) {
@@ -745,9 +829,6 @@ void Runtime::ReplaceNoteVisuals(GlobalNamespace::NoteController* noteController
     VIVIFY_DEBUG("Vivify note replace: {} valid prefab(s) but nothing spawned/hidden", validInfos.size());
     return;
   }
-  VIVIFY_DEBUG("Vivify note replaced: valid={} spawned={} replacementRenderers={} hideOriginal={} hiddenOriginals={}",
-               validInfos.size(), replacement.spawnedObjects.size(), replacement.replacementRenderers.size(),
-               hideOriginal, replacement.disabledRenderers.size());
 
   auto* mpb = GetReplacementMaterialPropertyBlockController(noteController, replacementParent);
   if (IsAlive(mpb)) {
@@ -756,6 +837,11 @@ void Runtime::ReplaceNoteVisuals(GlobalNamespace::NoteController* noteController
   if (hideOriginal) {
     DisableOriginalRenderers(originalRenderers, replacement);
   }
+  VIVIFY_DEBUG("Vivify note replaced: valid={} spawned={} replacementRenderers={} hideOriginal={} hiddenOriginals={}",
+               validInfos.size(), replacement.spawnedObjects.size(), replacement.replacementRenderers.size(),
+               hideOriginal, replacement.disabledRenderers.size());
+  replacement.hideOriginal = hideOriginal;
+  replacement.appliedFingerprint = ComputePrefabFingerprint(infos);
   _noteReplacements[noteController] = std::move(replacement);
 }
 
@@ -764,20 +850,10 @@ void Runtime::TrackSaberModel(GlobalNamespace::SaberModelController* smc, Global
 
   if (!_selectedMapHasVivifyRequirement) return;
   if (!IsAlive(smc) || !IsAlive(saber)) return;
-  UnityEngine::Transform* parent = nullptr;
-  auto smcTransform = smc->get_transform();
-  if (IsAlive(smcTransform.unsafePtr())) {
-    auto smcParent = smcTransform->get_parent();
-    auto* candidate = smcParent.unsafePtr();
-    if (IsAlive(candidate) && candidate->GetComponent<GlobalNamespace::Saber*>() == saber) {
-      parent = candidate;
-    }
-  }
-  if (!IsAlive(parent) && IsAlive(initParent) && initParent->GetComponent<GlobalNamespace::Saber*>() == saber) {
-    parent = initParent;
-  }
+
+  UnityEngine::Transform* parent = smc->get_transform().unsafePtr();
   if (!IsAlive(parent)) parent = saber->get_transform().unsafePtr();
-  if (!IsAlive(parent)) parent = initParent;
+  if (!IsAlive(parent) && IsAlive(initParent)) parent = initParent;
   if (!IsAlive(parent)) return;
   if (GetVivifyDebugLogging()) {
 
@@ -796,7 +872,9 @@ void Runtime::TrackSaberModel(GlobalNamespace::SaberModelController* smc, Global
       }
       PaperLogger.info("Vivify saber chain {}: {}", label, chain);
     };
-    dumpChain("saberTransform", parent);
+    dumpChain("modelNode(smc)", parent);
+    auto saberNode = saber->get_transform();
+    if (IsAlive(saberNode.unsafePtr()) && saberNode.unsafePtr() != parent) dumpChain("saberNode", saberNode.unsafePtr());
     if (IsAlive(initParent) && initParent != parent) dumpChain("initParent", initParent);
   }
   PurgeInvalidActiveSabers();
@@ -821,11 +899,21 @@ void Runtime::ApplySaberVisualsToActive() {
 
 void Runtime::ApplySaberVisuals(GlobalNamespace::SaberModelController* smc, GlobalNamespace::Saber* saber,
                                 UnityEngine::Transform* parent) {
-  RestoreSaberVisuals(smc);
-  if (!IsAlive(smc) || !IsAlive(saber) || !IsAlive(parent) || _currentBeatmapData == nullptr || _isResetting) return;
+  if (!IsAlive(smc) || !IsAlive(saber) || !IsAlive(parent) || _currentBeatmapData == nullptr || _isResetting) {
+    RestoreSaberVisuals(smc);
+    return;
+  }
   int type = (int)saber->get_saberType();
   auto modelInfos = FindAssignedSaberPrefabs(type);
   auto trailInfos = FindAssignedSaberTrailPrefabs(type);
+  auto existing = _saberReplacements.find(smc);
+  if (existing != _saberReplacements.end() &&
+      existing->second.appliedFingerprint == ComputeSaberFingerprint(modelInfos, trailInfos) &&
+      ReplacementIntact(existing->second)) {
+    ApplySaberReplacementColor(smc, saber, existing->second, true);
+    return;
+  }
+  RestoreSaberVisuals(smc);
   auto validModelInfos = GetValidPrefabInfos(modelInfos);
   auto validTrailInfos = GetValidPrefabInfos(trailInfos);
   if (validModelInfos.empty() && validTrailInfos.empty()) {
@@ -849,6 +937,7 @@ void Runtime::ApplySaberVisuals(GlobalNamespace::SaberModelController* smc, Glob
                type, validModelInfos.size(), validTrailInfos.size(), replacement.spawnedObjects.size(),
                replacement.replacementRenderers.size(), replacement.disabledRenderers.size());
   if (!replacement.spawnedObjects.empty() || !replacement.disabledRenderers.empty()) {
+    replacement.appliedFingerprint = ComputeSaberFingerprint(modelInfos, trailInfos);
     _saberReplacements[smc] = std::move(replacement);
   }
 }

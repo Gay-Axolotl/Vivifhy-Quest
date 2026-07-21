@@ -70,6 +70,8 @@ public:
   }
 
   void ClearCullingData() {
+
+    CullingPostRender();
     _whitelist = false;
     _tracks.clear();
     _hasCullingData = false;
@@ -82,7 +84,8 @@ private:
   std::optional<int> _cachedMask;
   bool _whitelist = false;
   std::vector<TrackW> _tracks;
-  std::vector<std::pair<UnityEngine::Renderer*, bool>> _cachedRendererStates;
+
+  std::vector<std::pair<UnityEngine::GameObject*, int>> _cachedLayers;
   bool _hasCullingData = false;
   int _diagLogCount = 0;
 };
@@ -121,6 +124,7 @@ private:
 DECLARE_CLASS_CODEGEN(Vivify, CameraApplier, UnityEngine::MonoBehaviour) {
   DECLARE_DEFAULT_CTOR();
   DECLARE_SIMPLE_DTOR();
+  DECLARE_INSTANCE_METHOD(void, OnPreCull);
   DECLARE_INSTANCE_METHOD(void, OnPreRender);
   DECLARE_INSTANCE_METHOD(void, OnPostRender);
   DECLARE_INSTANCE_METHOD(void, OnRenderImage, UnityEngine::RenderTexture* src, UnityEngine::RenderTexture* dest);
