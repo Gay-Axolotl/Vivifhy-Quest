@@ -158,9 +158,6 @@ MOD_EXTERN_FUNC void setup(CModInfo *info) noexcept {
   getConfig().Load();
   EnsureConfigDefaults();
 
-  gMultipassRenderingEnabled = false;
-
-  gVivifyDebugLogging = false;
   PaperLogger.info("Vivify file logging active -> {}", kVivifyLogPath);
 }
 MOD_EXTERN_FUNC void late_load() noexcept {
